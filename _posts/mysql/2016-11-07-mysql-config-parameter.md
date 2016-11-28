@@ -107,6 +107,9 @@ innodb\_thread\_concurrency>0,则表示检查机制开启，如已经超过innod
 
  看看[官网解释](http://dev.mysql.com/doc/refman/5.7/en/external-locking.html)吧!相关人士[博客](http://www.kuqin.com/database/20120815/328905.html)。
 
+**skip_slave_start** mysql服务启动后跳过自动启动复制
+
+
 **log\_bin**=/data/mysqllog/20000/binlog/binlog20000.bin 设置binlog日志的位置以及其相关名称
 
 **log\_bin\_trust\_function\_creators**=1
@@ -118,9 +121,22 @@ log_bin_trust_function_creators参数缺省0，是不允许function的同步的�
 该参数就是为了让从库从主库复制数据时可以写入到binlog日志。那么为什么不是从库开启了log_bin就可以了呢？
 答：从库开启log-bin参数，如果直接往从库写数据，是可以记录log-bin日志的，但是从库通过I0线程读取主库二进制日志文件，然后通过SQL线程写入的数据，是不会记录binlog日志的。也就是说从库从主库上复制的数据，是不写入从库的binlog日志的。所以从库做为其他从库的主库时需要在配置文件中添加log-slave-updates参数。
 
+
 **max\_binlog\_size**=256M 设置binlog文件的大小。
 
 **relay-log**=/data/mysqldata/20000/relay-log/relay-log.bin 设置relay-log的文件名称和位置
+
+**relay_log_recovery=1**  
+该参数主要是在slave服务器启动后,会根据上一次SQL thread处理到relay log的位置重新初始化一个relay log,并初始化IO thread和SQL Thread到同样的位置。再从master上拉取日志。
+
+换一句说法就是：relay_log_recovery=1,当slave宕机后,如果relay-log损坏了，导致一部分中继日志没有处理，则自动放弃所有未执行的relay-log,并从最后执行的relay log位置重新从master上获取日志,该参数默认关闭。同时该参数不能动态改变。
+
+对应错误:
+
+```
+161128 16:40:28 [ERROR] Slave SQL: Relay log read failure: Could not parse relay log event entry. The possible reasons are: the master's binary log is corrupted (you can check this by running 'mysqlbinlog' on the binary log), the slave's relay log is corrupted (you can check this by running 'mysqlbinlog' on the relay log), a network problem, or a bug in the master's or slave's MySQL code. If you want to check the master's binary log or slave's relay log, you will be able to know their names by issuing 'SHOW SLAVE STATUS' on this slave. Error_code: 1594
+161128 16:40:28 [ERROR] Error running query, slave SQL thread aborted. Fix the problem, and restart the slave SQL thread with "SLAVE START". We stopped at log 'binlog.134374' position 198324449
+```
 
 **slow\_query\_log\_file**=/data/mysqllog/20000/slow-query.log 慢查询日志位置和名称
 

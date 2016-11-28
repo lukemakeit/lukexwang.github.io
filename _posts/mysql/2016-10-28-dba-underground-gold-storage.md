@@ -9,10 +9,15 @@ keywords: MySQL
 
 ### 紧急情况下DR切DB
 紧急情况下DB故障，如磁盘只读、硬件故障。需要将DR切换成DB，需要检查的项有下面这些:
+
 - 如果DB还能启动，则DB上show master status、DR上show slave status，查看DB的binlog file、binlog pos与DR的Relay\_Masster\_Log\_File、Exec\_Master\_Log\_Pos是否一致;
+
 - 如果DB不能启动了则DR show slave status查看**Master\_Log\_File**和**Read\_Mater\_Log\_Pos**,**Relay\_Master\_Log\_File**和**Exec\_Master\_Log\_Pos**是否一致；
+
 - 检查DB和DR每天的数据检校(表db\_infobase.checksum)，确认是否有异常；(依赖于每天的数据检校)
+
 - 将DB的权限克隆到DR上；(依赖每天DB权限的保存上报到其他地方);
+
 - 如果以上的步骤都没问题则可以将DB切换到DR。
 
 ### MySQL character set相关
