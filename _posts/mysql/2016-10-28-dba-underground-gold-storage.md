@@ -47,7 +47,7 @@ create table在没有明确指定字符集的时候，mysql使用的默认字符
     - 若上述值不存在，则使用对应**数据库**的DEFAULT CHARACTER SET设定值;
     - 若上述值不存在，则使用**character\_set\_server**设定值;
 3. 将操作结果从内部操作字符集转换为**character\_set\_results**:
-![mysql_char_set_chart](/images/posts//mysql/mysql_char_set_chart.jpg)
+![mysql_char_set_chart](/images/posts/mysql/mysql_char_set_chart.jpg)
 
 **本地连接mysql指定--default-character-set=utf8或者php访问页面前面加上mysql_query("SET NAMES utf8");均可使:character\_set\_client、character\_set\_connection和character\_set\_results变为utf8。**
 
@@ -55,3 +55,37 @@ create table在没有明确指定字符集的时候，mysql使用的默认字符
 
 - **情况一**:表字符集指定为utf8,character\_set\_client、character\_set\_connection和character\_set\_results均为latin1。出错情况具体参考:[文章](http://www.jb51.net/article/30864.htm)
 - **情况二**:表字符集指定为latin1,character\_set\_client、character\_set\_connection和character\_set\_results均为utf8。出错情况具体参考:[文章](http://www.jb51.net/article/30864.htm)
+
+### 关于timestamp时间范围
+前两天遇到一个问题：从MySQL实例中dump出来的表结构sql文件，导入一个新的MySQL实例中时,出现了错误:
+
+```SQL
+----------------
+create table champion_info(
+  id bigint(20) not null default '0',
+  ....
+  worship_time timestamp not null default '1970-01-01 04:00:00',
+  ....
+)engine=InnoDB default CHARSET=latin1
+Waring (Code 1264):Out of range value for column 'worship_time' at row 1
+Error (Code 1067):Invalid default value for 'worship_time'
+Bye
+```
+timestamp的默认时间范围是'1970-01-01 00:00:00' 到 '2038-01-19 03:14:07',**为什么会提示设置的默认时间'1970-01-01 04:00:00'是无效值呢？而且让人感觉奇怪的是：我在原MySQL实例总show create table champion_info;看到worship_time的默认值其实是'1970-01-01 12:00:00',而将表结构导出来后worship_time的默认时间就变成了'1970-01-01 04:00:00'。**
+
+答：经过搜索，找到了相关解释:[MySQL的timestamp字段可以使用的范围是多少](https://segmentfault.com/a/1190000002570685)。
+从上面的文章特别是[官网的解释](http://dev.mysql.com/doc/refman/5.7/en/datetime.html)中我们可以知道**timestamp的实际时间范围是:'1970-01-01 00:00:00 UTC' ~ '2038-01-19 03:14:07 UTC'**。MySQL在保存timestamp类型时间值时,会将时间从当前时区转换为UTC(格林时间)存储,而查询相关值时会将时间值从格林时间转换为当前时间返回。
+
+所以对于东八区的我们来说,timestamp的最小时间是'1970-01-01 08:00:00',那么也就解释了为什么设置worship_time的默认时间为'1970-01-01 04:00:00'时会出错。
+
+但是第二个问题还是没有解决，**为什么现网show create table champion_info;看到worship_time的时间默认值是'1970-01-01 12:00：00',而导出来的SQL文件中变成了'1970-01-01 04:00:00'？**
+
+在师兄vin的帮助下，仔细看了一下SQL文件，才发现有这么几行:
+
+```SQL
+SET @OLD_TIME_ZONE=@@TIME_ZONE 保存当前时区
+SET TIME_ZONE='+00:00' 转换为UTC时区
+....
+SET TIME_ZONE=@OLD_TIME_ZONE 回到当前时区
+```
+所以在导出champion_info表结构时,MySQL当前会话时区实际是UTC时区。所以12:00 - 08:00刚好是04:00。而我们在导入的时候实际上是将所有的SQL文件中的SET语句给剔除了，只留下表结构创建语句,这样create table champion_info(...,worship_time timestamp not null default '1997-01-01 04:00:00')必然出错。
